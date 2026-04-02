@@ -30,9 +30,7 @@
     "priority": "medium",
     "start": "2026-03-28",
     "isPinned": false,
-    "watched": 0,
-    "total": 0,
-    "progress": 0,
+    "count": 0,
     "timestamp": 1743150200000
   }
 ]

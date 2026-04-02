@@ -45,6 +45,11 @@
                 <select id="taskUser">
                     <option value="曜廷">曜廷</option>
                     <option value="德昇">德昇</option>
+                    <option value="奕名">奕名</option>
+                    <option value="詒軒">詒軒</option>
+                    <option value="芷翎">芷翎</option>
+                    <option value="湘綺">湘綺</option>
+                    <option value="欣妤">欣妤</option>
                 </select>
             </div>
     
@@ -74,6 +79,16 @@
                     </div>
                 </div>
                 <input type="hidden" id="taskProgress">
+            </div>
+            <div class="form-group" id="countGroup" style="display:none; background: #3d3d3d; padding: 10px; border-radius: 8px;">
+                <label class="text-amber-400 font-bold mb-2 block">📺 任務進度追蹤</label>
+                <div class="flex gap-3 items-center">
+                    <div>
+                        <label class="text-xs text-slate-400">已做</label>
+                        <input type="number" id="didCount" class="w-20" min="0" value="0">
+                    </div>
+                </div>
+                <input type="hidden" id="taskCount">
             </div>
             <div class="form-group">
                 <label>開始日期：</label>
@@ -172,6 +187,7 @@
         const modal = document.getElementById('taskModal');
         const modalTitle = document.getElementById('modalTitle');
         const progressGroup = document.getElementById('progressGroup');
+        const countGroup = document.getElementById('countGroup');
         
         if (id) {
             // --- 編輯模式 ---
@@ -184,21 +200,25 @@
 
             // 關鍵判斷：只有置頂任務 (isPinned) 才顯示進度調整
             if (taskData.isPinned) {
+                countGroup.style.display = "none";
                 progressGroup.style.display = "block";
                 document.getElementById('watchedCount').value = taskData.watched || 0;
                 document.getElementById('totalCount').value = taskData.total || 1;
                 document.getElementById('taskProgress').value = taskData.progress || 0;
             } else {
                 progressGroup.style.display = "none";
+                countGroup.style.display = "block";
+                document.getElementById('didCount').value = taskData.count || 0;
             }
         } else {
             // --- 新增模式 ---
             modalTitle.innerText = "✨ 新增一般任務";
             progressGroup.style.display = "none"; // 新增時預設隱藏趴數
+            countGroup.style.display = "block";
             document.getElementById('editTaskId').value = "";
             document.getElementById('taskTitle').value = "";
             document.getElementById('startDate').valueAsDate = new Date();
-            document.getElementById('taskProgress').value = 0;
+            document.getElementById('taskCount').value = 0;
         }
         modal.style.display = 'block';
     };
@@ -229,7 +249,8 @@
             taskData.total = total;
             taskData.progress = percent > 100 ? 100 : percent; // 存入計算後的趴數
         } else {
-            taskData.progress = 0; // 一般任務不計趴數
+            const counted = parseInt(document.getElementById('didCount').value) || 0;
+            taskData.count= counted; // 一般任務不計趴數
             // 如果原本是置頂任務被改回一般任務，可以把 isPinned 設為 false
             taskData.isPinned = false; 
         }
@@ -331,13 +352,19 @@
                         task.priority === 'medium' ? 'bg-amber-400' : 'bg-emerald-400';
 
         // 判斷：如果是置頂任務，隱藏刪除按鈕
-        const deleteBtnHtml = showProgress ? '' : `<button id="del-${id}" class="bg-white rounded-md text-slate-400 hover:text-rose-500 text-xs p-1">🗑️</button>`;
+        const deleteBtnHtml = showProgress ? '' : `<button id="del-${id}" class="bg-white rounded-md text-slate-400 hover:text-blue-500 text-sm px-4 p-1">🗑️</button>`;
 
         const plusOneBtn = showProgress ? `
-            <button id="plus-${id}" class="ml-2 bg-white text-blue-700 font-bold px-4 rounded-md active:scale-95 transition-all text-sm">
+            <button id="plus-${id}" class="bg-orange-300 text-blue-700 font-bold px-4 rounded-md active:scale-95 transition-all text-sm">
                 ＋1 集
             </button>
-        ` : '';
+        ` : `<button id="pluslimit-${id}" class="bg-green-300 text-blue-700 font-bold px-4 rounded-md active:scale-95 transition-all text-sm">
+                ＋1 次
+            </button>`;
+
+        const minusOneBtn = showProgress ? '' : `<button id="minus-${id}" class="bg-rose-300 text-blue-700 font-bold px-4 rounded-md active:scale-95 transition-all text-sm">
+                -1 次
+            </button>`;
 
         // 判斷：進度條 HTML
         const progressHtml = showProgress ? `
@@ -350,7 +377,10 @@
                     <div class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: ${task.progress || 0}%"></div>
                 </div>
             </div>
-        ` : `<span class="text-[14px] font-bold text-slate-500">🔥 已經衝刺 ${days} 天</span>`;
+        ` : `<div class="flex items-center justify-between mb-2 px-1">
+                <span class="text-[14px] font-bold text-slate-500">🔥 已經衝刺 ${days} 天</span>
+                <span class="text-[16px] font-bold text-blue-600">${task.count || 0}次</span>
+            </div>`;
 
         const cardHtml = `
             <div class="bg-white rounded-2xl shadow-sm border ${showProgress ? 'border-blue-400 border-2' : 'border-slate-300'} mb-4 overflow-hidden relative">
@@ -358,6 +388,7 @@
                     <button id="edit-${id}" class="bg-white rounded-md text-slate-400 hover:text-blue-500 text-sm px-4 p-1">✏️</button>
                     ${deleteBtnHtml}
                     ${plusOneBtn}
+                    ${minusOneBtn}
                 </div>
                 <div class="px-5 py-3 ${titleColor}">
                     <span class="px-2 py-1 bg-white text-slate-500 rounded-md text-[10px] font-bold border border-slate-200">
@@ -378,8 +409,9 @@
         document.getElementById(`edit-${id}`).addEventListener('click', () => openModal(id, task));
         if (!showProgress) {
             document.getElementById(`del-${id}`).addEventListener('click', () => deleteTask(id));
-        } else {
-            // 綁定「＋1」按鈕的功能
+            document.getElementById(`minus-${id}`).addEventListener('click', () => changeCount(id,task,-1));
+            document.getElementById(`pluslimit-${id}`).addEventListener('click', () => changeCount(id,task,1));
+        }else{
             document.getElementById(`plus-${id}`).addEventListener('click', () => window.addOne(id, task));
         }
     }
@@ -408,12 +440,20 @@
         });
     });
 
+    function changeCount(id, task, delta){
+        const newCount = (task.count || 0) + delta;
+        if(newCount < 0) return alert("目前已為負值");
+        update(ref(db, `tasks/${id}`), {
+            count: newCount,
+        });
+    }
+
     window.addOne = function(id, task) {
         const newWatched = (task.watched || 0) + 1;
         const total = task.total || 1;
         
         // 防呆：如果已經看完了，就不再加
-        if (newWatched > total) return alert("太強了！你已經看完了全集！");
+        if (newWatched > total) return 0;
 
         const newPercent = Math.round((newWatched / total) * 100);
 

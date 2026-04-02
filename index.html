@@ -298,21 +298,31 @@
     container.innerHTML = ""; 
 
     if (data) {
+        // 將資料轉成陣列
         const allTasks = Object.keys(data).map(key => ({ id: key, ...data[key] }));
 
-        // 1. 找出置頂任務 (你跟德昇的總進度)
-        // 假設這兩個任務的標題包含 "總進度" 關鍵字，或者你可以根據 user 判斷
-        const pinnedTasks = allTasks.filter(t => t.isPinned === true);
-        const normalTasks = allTasks.filter(t => !t.isPinned);
+        // 核心排序邏輯
+        allTasks.sort((a, b) => {
+            // 第一層：先排「置頂」(isPinned)
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
 
-        // 2. 先渲染置頂任務 (強制顯示進度條)
-        pinnedTasks.forEach(task => {
-            renderCard(container, task, calculateDays(task.start), task.id, true);
+            // 第二層：如果都是置頂，或都不是置頂，則排「緊急程度」
+            const priorityMap = { 'high': 1, 'medium': 2, 'low': 3 };
+            const weightA = priorityMap[a.priority] || 4; // 沒設的話排最後
+            const weightB = priorityMap[b.priority] || 4;
+
+            if (weightA !== weightB) {
+                return weightA - weightB;
+            }
+
+            // 第三層（選做）：程度一樣時，按時間新舊排 (最新在上面)
+            return b.timestamp - a.timestamp;
         });
 
-        // 3. 再渲染一般任務 (隱藏進度條)
-        normalTasks.forEach(task => {
-            renderCard(container, task, calculateDays(task.start), task.id, false);
+        // 最後跑迴圈渲染
+        allTasks.forEach(task => {
+            renderCard(container, task, calculateDays(task.start), task.id, task.isPinned);
         });
     }
 });

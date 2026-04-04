@@ -12,6 +12,7 @@
     }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         /* 緊急程度顏色 */
+        .priority-expired { border-left: 10px solid #ff0000; }
         .priority-high { border-left: 10px solid #ff4d4d; }
         .priority-medium { border-left: 10px solid #f09d45; }
         .priority-low { border-left: 10px solid #ffcc00; }
@@ -21,11 +22,12 @@
 <body>
     <nav class="sticky top-0 bg-white/90 backdrop-blur-sm shadow-sm z-50 overflow-hidden border-b border-slate-200">
         <div class="flex py-3 px-4 gap-2 overflow-x-auto no-scrollbar scroll-smooth">
-            <h1 class="px-5 py-2 bg-rose-300 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0">期末報告倒數 <span class="countdown-tag text-rose-600" data-date="2026-06-06T00:00:00"></span></h1>
-            <h1 id="stat-countsh" class="px-5 py-2 bg-rose-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
-            <h1 id="stat-countsm" class="px-5 py-2 bg-orange-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
-            <h1 id="stat-countsl" class="px-5 py-2 bg-amber-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
-            <h1 id="stat-countsn" class="px-5 py-2 bg-emerald-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 class="px-5 py-2 bg-state rounded-xl text-m font-black border border-slate-200 transition-all shrink-0">期末報告倒數 <span class="countdown-tag text-rose-600" data-date="2026-06-06T00:00:00"></span></h1>
+            <h1 id="stat-countse" class="px-5 py-2 bg-red-400 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 id="stat-countsh" class="px-5 py-2 bg-rose-200 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 id="stat-countsm" class="px-5 py-2 bg-orange-200 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 id="stat-countsl" class="px-5 py-2 bg-amber-200 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 id="stat-countsn" class="px-5 py-2 bg-emerald-200 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
         </div>
     </nav>
     <main class="p-4 max-w-md mx-auto">
@@ -40,16 +42,7 @@
             <input type="hidden" id="editTaskId"> 
 
             <input type="text" id="taskTitle" placeholder="任務名稱">
-    
-            <div class="form-group">
-                <label>緊急程度：</label>
-                <select id="taskPriority">
-                    <option value="high">一週內需完成 (高度重要性)</option>
-                    <option value="medium">一個月內需完成 (中度重要性)</option>
-                    <option value="low">必須在報告前完成 (低度重要性)</option>
-                    <option value="no">已完成</option>
-                </select>
-            </div>
+
             <div class="form-group">
                 <label>結束日期：</label>
                 <input type="date" id="endDate">
@@ -147,21 +140,21 @@
         const modal = document.getElementById('taskModal');
         const modalTitle = document.getElementById('modalTitle');
         
-        if (id) {
+        if (id && taskData) {
             // --- 編輯模式 ---
             modalTitle.innerText = "✏️ 編輯任務";
             document.getElementById('editTaskId').value = id;
             document.getElementById('taskTitle').value = taskData.title;
-            document.getElementById('taskPriority').value = taskData.priority;
             document.getElementById('endDate').value = taskData.end;
-
         } else {
             // --- 新增模式 ---
             modalTitle.innerText = "✨ 新增一般任務";
             document.getElementById('editTaskId').value = "";
             document.getElementById('taskTitle').value = "";
-            document.getElementById('taskPriority').value = "medium"; // 給個預設值
-            document.getElementById('endDate').valueAsDate = new Date();
+            // 預設明天
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('endDate').value = tomorrow.toISOString().split('T')[0];
         }
         modal.style.display = 'block';
     };
@@ -169,17 +162,32 @@
 // 統一儲存入口
     window.handleSave = function() {
         const id = document.getElementById('editTaskId').value;
-        
-        // 1. 抓取基本欄位
+        const taskTitle = document.getElementById('taskTitle').value;
+        const endDateValue = document.getElementById('endDate').value; // 取得字串值
+        const selectedDate = new Date(endDateValue);
+        const reportLimit = new Date("2026-06-06");
+
+        if (!taskTitle || !endDateValue) {
+            alert("請填寫任務名稱與日期！");
+            return;
+        }
+
+        if (selectedDate > reportLimit) {
+            alert("⚠️ 截止日期不能在期末報告（2026-06-06）之後喔！");
+            return;
+        }
+
+        // 關鍵修正：傳入的是 .value 拿到的日期字串
+        const calculatedPriority = calculatePriority(endDateValue);
+
         const taskData = {
-            title: document.getElementById('taskTitle').value,
-            priority: document.getElementById('taskPriority').value,
-            end: document.getElementById('endDate').value,
-            finished: document.getElementById('taskPriority').value === 'no' ? "true" : "false",
+            title: taskTitle,
+            priority: calculatedPriority,
+            end: endDateValue,
+            finished: "false", 
             timestamp: Date.now()
         };
 
-        // 3. 儲存到 Firebase
         if (id) {
             update(ref(db, `tasks/${id}`), taskData);
         } else {
@@ -203,15 +211,22 @@
 
         if (data) {
             // 將資料轉成陣列
-            const allTasks = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            const allTasks = Object.keys(data).map((key, originalIndex) => ({ 
+                id: key, 
+                ...data[key],
+                displayNum: originalIndex + 1 // 這會是它在資料庫中的原始位置
+            }));
             const count = {
-            high: allTasks.filter(t => t.priority === 'high').length,
-            medium: allTasks.filter(t => t.priority === 'medium').length,
-            low: allTasks.filter(t => t.priority === 'low').length,
-            done: allTasks.filter(t => t.priority === 'no' || t.finished === 'true').length
-        };
+                expired: allTasks.filter(t => t.priority === 'expired').length,
+                high: allTasks.filter(t => t.priority === 'high').length,
+                medium: allTasks.filter(t => t.priority === 'medium').length,
+                low: allTasks.filter(t => t.priority === 'low').length,
+                done: allTasks.filter(t => t.priority === 'no' || t.finished === 'true').length
+            };
 
             // 更新畫面（假設你在導航欄增加了對應的 id 元素）
+            document.getElementById('stat-countse').innerHTML = `
+            <span class="text-black">已過期:${count.expired}</span>`;
             document.getElementById('stat-countsh').innerHTML = `
             <span class="text-rose-600">本週前完成:${count.high}</span>`;
             document.getElementById('stat-countsm').innerHTML = `
@@ -223,28 +238,33 @@
             
                 
             // 核心排序邏輯
-            allTasks.sort((a, b) => {
 
-                // 第一層：如果都是置頂，或都不是置頂，則排「緊急程度」
-                const priorityMap = { 'high': 1, 'medium': 2, 'low': 3 };
-                const weightA = priorityMap[a.priority] || 4; // 沒設的話排最後
-                const weightB = priorityMap[b.priority] || 4;
+            allTasks.sort((a, b) => {
+                const priorityMap = { 'expired': 1, 'high': 2, 'medium': 3, 'low': 4, 'no': 5 };
+                const weightA = priorityMap[a.priority] || 6;
+                const weightB = priorityMap[b.priority] || 6;
 
                 if (weightA !== weightB) {
-                    return weightA - weightB;
+                    return weightA - weightB; // 先按優先級排
                 }
 
-                // 第二層（選做）：程度一樣時，按時間新舊排 (最新在上面)
-                return b.timestamp - a.timestamp;
+                // 同優先級時，按結束日期排 (近的在前)
+                const dateA = new Date(a.end).getTime();
+                const dateB = new Date(b.end).getTime();
+                if (dateA !== dateB) {
+                    return dateA - dateB;
+                }
+
+                return b.timestamp - a.timestamp; // 日期也一樣時，按建立時間排
             });
 
             // 最後跑迴圈渲染
-            allTasks.forEach((task, index) => {
-            // index 從 0 開始，所以 +1 就是編號
-            renderCard(container, task, calculateDays(task.end), task.id, index + 1);
+            allTasks.forEach((task) => {
+                renderCard(container, task, calculateDays(task.end), task.id, task.displayNum);
             });
         }
         if (!data) {
+            document.getElementById('stat-countse').innerText = "已過期:0";
             document.getElementById('stat-countsh').innerText = "本週前完成:0";
             document.getElementById('stat-countsm').innerText = "本月前完成:0";
             document.getElementById('stat-countsl').innerText = "報告前做完:0";
@@ -286,9 +306,11 @@
     function renderCard(container, task, days, id,num) {
         const isDone = (task.priority === 'no' || task.finished === 'true');
         const cardOpacity = isDone ? 'opacity-50 grayscale-[0.5]' : 'opacity-100';
-        const titleColor = task.priority === 'high' ? 'bg-rose-400' : 
-                        task.priority === 'medium' ? 'bg-orange-400' : 
-                        task.priority === 'low' ? 'bg-amber-400' :'bg-emerald-400';
+        const titleColor = task.priority === 'expired' ? 'bg-rose-400' : 
+                    task.priority === 'high' ? 'bg-rose-400' : 
+                    task.priority === 'medium' ? 'bg-orange-400' : 
+                    task.priority === 'low' ? 'bg-amber-400' :
+                    'bg-emerald-400'; 
 
         // 修正 1：加上反引號
         const deleteBtnHtml = `<button id="del-${id}" class="bg-white rounded-md text-slate-400 hover:text-blue-500 text-sm px-4 p-1">🗑️</button>`;
@@ -296,9 +318,12 @@
         const finishedBtn = (task.priority === 'no' || task.finished === 'true') ? '' : `<button id="finish-${id}" class="bg-green-500 text-slate-800 font-bold px-4 rounded-md active:scale-95 transition-all text-sm">已完成</button>`;
 
         // 修正 2：加上反引號，並確保 days 有數值
-        const progressHtml = `
-            <div class="flex items-center justify-between mb-2 px-1">
-                <span class="text-[16px] font-bold text-blue-700">剩餘 ${days || 0} 天</span>
+        const progressHtml = (task.priority === 'expired'|| task.priority === 'no') ?  `
+            <div class="flex items-center justify-end mb-2 px-1">
+                <span class="text-[16px] font-bold text-blue-700">${days<0 ? "已逾期"+ (Math.abs(days) || 0)+ "天" : "剩餘 " + (days ?? 0) + " 天"}</span>
+            </div>`: `
+            <div class="flex items-center justify-end mb-2 px-1">
+                <span class="text-[16px] font-bold text-blue-700">${days === 0 ? "今天截止" : "剩餘 " + (days || 0) + " 天"}</span>
             </div>`;
 
         const cardHtml = `
@@ -341,8 +366,30 @@
     function calculateDays(Dateend) {
         const end = new Date(Dateend);
         const today = new Date();
-        const diffTime = Math.abs(end - today);
+        const diffTime = end - today;
         return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function calculatePriority(dateStr) {
+        if (!dateStr) return "low"; 
+        
+        const end = new Date(dateStr);
+        const today = new Date();
+        end.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        
+        // 計算天數差
+        const diffTime = end - today;
+        const days = (Math.round(diffTime / (1000 * 60 * 60 * 24)));
+        // 定義期末報告剩餘天數
+        const reportDate = new Date("2026-06-06");
+        const reportDays = (Math.ceil((reportDate - today) / (1000 * 60 * 60 * 24)));
+
+        if (days < 0) return "expired";
+        if (days >= 0 && days <= 7) return "high";
+        if (days > 7 && days <= 20) return "medium"; 
+        if (days > 20 && days <= reportDays) return "low"; 
+        return "no";
     }
 
 </script>

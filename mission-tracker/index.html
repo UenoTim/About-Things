@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html { scroll-behavior: smooth; }
+        section {
+        scroll-margin-top: 40px;
+    }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        /* 緊急程度顏色 */
+        .priority-high { border-left: 10px solid #ff4d4d; }
+        .priority-medium { border-left: 10px solid #f09d45; }
+        .priority-low { border-left: 10px solid #ffcc00; }
+        .priority-no { border-left: 10px solid #45f045; }
+    </style>
+</head>
+<body>
+    <nav class="sticky top-0 bg-white/90 backdrop-blur-sm shadow-sm z-50 overflow-hidden border-b border-slate-200">
+        <div class="flex py-3 px-4 gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+            <h1 class="px-5 py-2 bg-rose-300 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0">期末報告倒數 <span class="countdown-tag text-rose-600" data-date="2026-06-06T00:00:00"></span></h1>
+            <h1 id="stat-countsh" class="px-5 py-2 bg-rose-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 id="stat-countsm" class="px-5 py-2 bg-orange-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 id="stat-countsl" class="px-5 py-2 bg-amber-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+            <h1 id="stat-countsn" class="px-5 py-2 bg-emerald-200 text-slate-600 rounded-xl text-m font-black border border-slate-200 transition-all shrink-0"></h1>
+        </div>
+    </nav>
+    <main class="p-4 max-w-md mx-auto">
+        <div id="task-container">
+            </div>
+    </main>
+    <button id="fab" onclick="toggleModal()">+</button>
+
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">✨ 新增進度任務</h3>
+            <input type="hidden" id="editTaskId"> 
+
+            <input type="text" id="taskTitle" placeholder="任務名稱">
+    
+            <div class="form-group">
+                <label>緊急程度：</label>
+                <select id="taskPriority">
+                    <option value="high">一週內需完成 (高度重要性)</option>
+                    <option value="medium">一個月內需完成 (中度重要性)</option>
+                    <option value="low">必須在報告前完成 (低度重要性)</option>
+                    <option value="no">已完成</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>結束日期：</label>
+                <input type="date" id="endDate">
+            </div>
+    
+            <div class="modal-buttons">
+                <button onclick="window.toggleModal()" style="background:#666;">取消</button>
+                <button id="saveBtn" onclick="window.handleSave()" style="background:#007bff;">儲存任務</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* 右下角加號按鈕 */
+        #fab {
+            position: fixed;
+            right: 30px;
+            bottom: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: white;
+            font-size: 30px;
+            border: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 999;
+            transition: transform 0.2s;
+        }
+        #fab:hover { transform: scale(1.1); }
+        
+        /* 彈出視窗背景 */
+        .modal {
+            display: none; 
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+        }
+        
+        /* 視窗主體 */
+        .modal-content {
+            background: #2a2a2a;
+            width: 90%;
+            max-width: 400px;
+            margin: 15% auto;
+            padding: 25px;
+            border-radius: 15px;
+            color: white;
+            font-family: sans-serif;
+        }
+        
+        .form-group { margin: 15px 0; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; background: #333; color: white; border: 1px solid #555; border-radius: 5px; box-sizing: border-box; }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-buttons button { flex: 1; padding: 10px; border: none; border-radius: 5px; color: white; cursor: pointer; }
+    </style>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+      import { getDatabase, ref, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
+    
+      // 這裡貼上你在 Firebase 畫面看到的內容
+    const firebaseConfig = {
+        apiKey: "AIzaSyB2z8xqrfWQVZ80zosV2S1rvUluQ27Gzo4",
+        authDomain: "nyust-graduation-project.firebaseapp.com",
+        databaseURL: "https://nyust-graduation-project-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "nyust-graduation-project",
+        storageBucket: "nyust-graduation-project.firebasestorage.app",
+        messagingSenderId: "1066425614743",
+        appId: "1:1066425614743:web:4fc984a8c666e718c784d2",
+        measurementId: "G-ED4BL81XGC"
+    };
+
+  // 初始化 Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const dbRef = ref(db, 'tasks');
+
+    // 修正：確保全域都能抓到 toggleModal
+    window.toggleModal = function() {
+        const modal = document.getElementById('taskModal');
+        // 如果目前是隱藏的，就打開它
+        if (modal.style.display === 'none' || modal.style.display === '') {
+            window.openModal(); // 這會觸發重設為「新增模式」
+        } else {
+            modal.style.display = 'none';
+        }
+    };
+
+// 開啟視窗：如果是編輯模式，會帶入資料
+    window.openModal = function(id = null, taskData = null) {
+        const modal = document.getElementById('taskModal');
+        const modalTitle = document.getElementById('modalTitle');
+        
+        if (id) {
+            // --- 編輯模式 ---
+            modalTitle.innerText = "✏️ 編輯任務";
+            document.getElementById('editTaskId').value = id;
+            document.getElementById('taskTitle').value = taskData.title;
+            document.getElementById('taskPriority').value = taskData.priority;
+            document.getElementById('endDate').value = taskData.end;
+
+        } else {
+            // --- 新增模式 ---
+            modalTitle.innerText = "✨ 新增一般任務";
+            document.getElementById('editTaskId').value = "";
+            document.getElementById('taskTitle').value = "";
+            document.getElementById('taskPriority').value = "medium"; // 給個預設值
+            document.getElementById('endDate').valueAsDate = new Date();
+        }
+        modal.style.display = 'block';
+    };
+
+// 統一儲存入口
+    window.handleSave = function() {
+        const id = document.getElementById('editTaskId').value;
+        
+        // 1. 抓取基本欄位
+        const taskData = {
+            title: document.getElementById('taskTitle').value,
+            priority: document.getElementById('taskPriority').value,
+            end: document.getElementById('endDate').value,
+            finished: document.getElementById('taskPriority').value === 'no' ? "true" : "false",
+            timestamp: Date.now()
+        };
+
+        // 3. 儲存到 Firebase
+        if (id) {
+            update(ref(db, `tasks/${id}`), taskData);
+        } else {
+            push(dbRef, taskData);
+        }
+        window.toggleModal();
+    };
+
+// 刪除功能
+    window.deleteTask = function(id) {
+        if (confirm("確定要刪除這個任務嗎？")) {
+            remove(ref(db, `tasks/${id}`));
+        }
+    };
+
+    // 1. 監聽雲端資料：只要資料一變動，這裡就會自動執行
+    onValue(dbRef, (snapshot) => {
+        const data = snapshot.val();
+        const container = document.getElementById('task-container');
+        container.innerHTML = ""; 
+
+        if (data) {
+            // 將資料轉成陣列
+            const allTasks = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            const count = {
+            high: allTasks.filter(t => t.priority === 'high').length,
+            medium: allTasks.filter(t => t.priority === 'medium').length,
+            low: allTasks.filter(t => t.priority === 'low').length,
+            done: allTasks.filter(t => t.priority === 'no' || t.finished === 'true').length
+        };
+
+            // 更新畫面（假設你在導航欄增加了對應的 id 元素）
+            document.getElementById('stat-countsh').innerHTML = `
+            <span class="text-rose-600">本週前完成:${count.high}</span>`;
+            document.getElementById('stat-countsm').innerHTML = `
+            <span class="text-orange-600">本月前完成:${count.medium}</span>`;
+            document.getElementById('stat-countsl').innerHTML = `
+            <span class="text-amber-600">報告前做完:${count.low}</span>`;
+            document.getElementById('stat-countsn').innerHTML = `
+            <span class="text-emerald-600">已完成:${count.done}</span>`;
+            
+                
+            // 核心排序邏輯
+            allTasks.sort((a, b) => {
+
+                // 第一層：如果都是置頂，或都不是置頂，則排「緊急程度」
+                const priorityMap = { 'high': 1, 'medium': 2, 'low': 3 };
+                const weightA = priorityMap[a.priority] || 4; // 沒設的話排最後
+                const weightB = priorityMap[b.priority] || 4;
+
+                if (weightA !== weightB) {
+                    return weightA - weightB;
+                }
+
+                // 第二層（選做）：程度一樣時，按時間新舊排 (最新在上面)
+                return b.timestamp - a.timestamp;
+            });
+
+            // 最後跑迴圈渲染
+            allTasks.forEach((task, index) => {
+            // index 從 0 開始，所以 +1 就是編號
+            renderCard(container, task, calculateDays(task.end), task.id, index + 1);
+            });
+        }
+        if (!data) {
+            document.getElementById('stat-countsh').innerText = "本週前完成:0";
+            document.getElementById('stat-countsm').innerText = "本月前完成:0";
+            document.getElementById('stat-countsl').innerText = "報告前做完:0";
+            document.getElementById('stat-countsn').innerText = "已完成:0";
+            return;
+        }
+    });
+
+    // --- 4. 倒數計時器 ---
+    function updateAllCountdowns() {
+    // 找出頁面上所有帶有這個 class 的標籤
+    const tags = document.querySelectorAll('.countdown-tag');
+
+    tags.forEach(tag => {
+        const endDateStr = tag.getAttribute('data-date');
+        if (!endDateStr) return;
+
+        const endDate = new Date(endDateStr).getTime();
+        const now = new Date().getTime();
+        const distance = endDate - now ;
+
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+
+        if (days > 0) {
+            tag.innerText = days + " 天";
+        } else if (days === 0) {
+            tag.innerText = "就是今天！";
+        } else {
+            tag.innerText = "已結束";
+        }
+    });
+}
+
+// 執行
+    updateAllCountdowns();
+
+        
+    // 2. 渲染卡片的輔助函式
+    function renderCard(container, task, days, id,num) {
+        const isDone = (task.priority === 'no' || task.finished === 'true');
+        const cardOpacity = isDone ? 'opacity-50 grayscale-[0.5]' : 'opacity-100';
+        const titleColor = task.priority === 'high' ? 'bg-rose-400' : 
+                        task.priority === 'medium' ? 'bg-orange-400' : 
+                        task.priority === 'low' ? 'bg-amber-400' :'bg-emerald-400';
+
+        // 修正 1：加上反引號
+        const deleteBtnHtml = `<button id="del-${id}" class="bg-white rounded-md text-slate-400 hover:text-blue-500 text-sm px-4 p-1">🗑️</button>`;
+
+        const finishedBtn = (task.priority === 'no' || task.finished === 'true') ? '' : `<button id="finish-${id}" class="bg-green-500 text-slate-800 font-bold px-4 rounded-md active:scale-95 transition-all text-sm">已完成</button>`;
+
+        // 修正 2：加上反引號，並確保 days 有數值
+        const progressHtml = `
+            <div class="flex items-center justify-between mb-2 px-1">
+                <span class="text-[16px] font-bold text-blue-700">剩餘 ${days || 0} 天</span>
+            </div>`;
+
+        const cardHtml = `
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-300 mb-4 overflow-hidden ${cardOpacity} relative priority-${task.priority}">
+                <div class="absolute top-3 right-3 flex gap-2 z-10">
+                    <button id="edit-${id}" class="bg-white rounded-md text-slate-400 hover:text-blue-500 text-sm px-4 p-1">✏️</button>
+                    ${deleteBtnHtml}
+                    ${finishedBtn}
+                </div>
+                <div class="px-5 py-3 ${titleColor}">
+                    <span class="px-2 py-1 bg-white text-slate-500 rounded-md text-[10px] font-bold border border-slate-200">
+                        No.${num}
+                    </span>
+                </div>
+                <div class="px-5 pb-5 border-t border-slate-50">
+                    <h3 class="text-[20px] font-black text-slate-800 mb-3 mt-4 pl-3 border-l-2 border-slate-200">
+                        ${task.title}
+                    </h3>
+                    ${progressHtml}
+                </div>
+            </div>`;
+        
+        container.insertAdjacentHTML('beforeend', cardHtml);
+
+        // 綁定事件
+        document.getElementById(`edit-${id}`).addEventListener('click', () => openModal(id, task));
+        document.getElementById(`del-${id}`).addEventListener('click', () => deleteTask(id));
+        const finishBtnEl = document.getElementById(`finish-${id}`);
+        if (finishBtnEl) {
+            finishBtnEl.addEventListener('click', () => {
+                update(ref(db, `tasks/${id}`), { 
+                    priority: "no", 
+                    finished: "true" 
+                });
+            });
+        }
+    }
+    
+    // 4. 計算天數 (確保沒壞掉)
+    function calculateDays(Dateend) {
+        const end = new Date(Dateend);
+        const today = new Date();
+        const diffTime = Math.abs(end - today);
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+</script>
+</body>
+</html>
